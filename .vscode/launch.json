@@ -1,0 +1,30 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        "--arch", "vgg_cifar",
+        "--cfg", "vgg16",
+        "--data_path", "/home/tianen/doc/MachineLearningData/",
+        "--job_dir", "/home/tianen/doc/_XiDian/___FinalDesign/FinalDesign_v0/experiment/cifar/vgg_1",
+        "--pretrain_model", "/home/tianen/doc/_XiDian/___FinalDesign/FinalDesign_v0/pretrain_model/vgg16_cifar10.pt",
+        "--lr", "0.01",
+        // "--lr_decay_step", "50 100",
+        "--weight_decay", "0.005 ",
+        "--num_epochs", "150",
+        "--gpus", "0",
+        "--pr_target", "0.7",
+        "--graph_gpu",
+      ]
+    }
+  ]
+}
