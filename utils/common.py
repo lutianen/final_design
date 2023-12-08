@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-import datetime, math
+import datetime
 import shutil
 from pathlib import Path
 import logging
@@ -244,16 +244,34 @@ def direct_project(weight, indices):
 
     return A
 
-def postProcessGrad(grad, targetGrad, indices):
+def postProcessGrad(grad, targetGrad, indices, name, v):
+    '''
+        梯度累积函数
+    '''
     # print(grad.size())
 
+    """
+        A = torch.zeros(grad.size())
+        A += grad
+        index # 0.1
+        c_grad = A[index] // 需要传输的梯度
+        A[index] = 0 // 将已传输的梯度清零
+        # orginal 的空洞梯度填充0
+    """
+
+    v[name] += grad # v 需要在外面初始化
+
     A = torch.zeros(grad.size())
-    if A.dim() == 4: 
+    if v[name].dim() == 4: 
         for i, indice in enumerate(indices):
-            A[:, i, :, :] = grad[:, indice, :, :]
+            # A[:, i, :, :] = A[:, indice, :, :]
+            A[:, i, :, :] = v[name][:, indice, :, :]
+            v[name][:, indice, :, :] = 0
     else:
         for i, indice in enumerate(indices):
-            A[:, i] = grad[:, indice]
+            # A[:, i] = grad[:, indice]
+            A[:, i] = v[name][:, indice]
+            v[name][:, indice] = 0
 
     return A
 
@@ -382,7 +400,11 @@ def graphGrad(grad, m):
 
     device = torch.device(f"cuda:{args.gpus[0]}") if torch.cuda.is_available() else 'cpu'
     # Calculate the similarity matrix and normalize
-    s_matrix = F.normalize(torch.exp(-pairwise_distances(G)), 1)
+
+    # pairwise_distances -> GCC 中的距离函数
+    temp = pairwise_distances(G)
+    s_matrix = F.normalize(torch.exp(-temp), 1)
+
     # Sort
     sorted_value, indices = torch.sort(s_matrix, descending=True)
    
