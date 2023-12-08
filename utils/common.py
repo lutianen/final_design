@@ -55,7 +55,7 @@ class record_config():
 
         _make_dir(self.job_dir)
 
-        config_dir = self.job_dir / 'config.txt'
+        config_dir = os.path.join(self.job_dir, getNowFormatTime() + ' config.txt')
         #if not os.path.exists(config_dir):
         if args.resume != None:
             with open(config_dir, 'a') as f:
