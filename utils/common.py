@@ -3,9 +3,10 @@ import datetime
 import shutil
 from pathlib import Path
 import logging
+import time
 import torch
 import torch.nn as nn
-from .options import args
+from utils.options import args
 import numpy as np
 import torch.nn.functional as F
 import random
@@ -442,3 +443,6 @@ def graphGrad(grad, m):
     m_matrix = F.normalize(torch.exp(-pairwise_distances(G, Gprune)),1)
     Gprune = Gprune.cpu()
     return m_matrix, s_matrix, Gprune, indicek
+
+def getNowFormatTime(formatStr: str = "%Y-%m-%d %H:%M:%S") -> str:
+    return time.strftime(formatStr, time.localtime(time.time()))
