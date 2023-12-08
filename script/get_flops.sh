@@ -8,7 +8,7 @@ DATA_DIR=/home/tianen/doc/MachineLearningData/
 # PROJECT_PREFIX=/home/lutianen/final_design
 # DATA_DIR=/home/tianen/data/
 
-python ${PROJECT_PREFIX}/train_test/train_vgg_cifar.py \
+python ${PROJECT_PREFIX}/utils/get_flops.py \
     --arch vgg_cifar \
     --cfg vgg16 \
     --data_path ${DATA_DIR} \
