@@ -1,6 +1,6 @@
 import math, time, sys, os, torch
 
-sys.path.append("/home/tianen/doc/_XiDian/___FinalDesign/FinalDesign_v0/")
+sys.path.append("/home/tianen/doc/_XiDian/___FinalDesign/FinalDesign/final_design")
 
 from data import cifar10_dataset
 
@@ -149,7 +149,7 @@ def graph_vgg(pr_target):
     return model, cfg
 
 
-def graphVGG(model, cr:float) :
+def graphVGG(model, cr:float, v) :
     cfg = []
     indices = []
     centroids = {}
@@ -173,6 +173,7 @@ def graphVGG(model, cr:float) :
             preversedGrad, _ = torch.topk(torch.abs(convGrad), preversedNum)
             threshold = preversedGrad[preversedNum-1]
 
+            # TODO  验证 knn 方法选择的正确性
             orginalConvGrad = item.grad.data
 
             cr = torch.sum(torch.lt(torch.abs(convGrad), threshold)).item()/convGrad.size(0)
@@ -205,15 +206,18 @@ def graphVGG(model, cr:float) :
         if name in centroidsKeys:
             idx += 1
             if idx == 0: continue
-            item.grad.data = utils.postProcessGrad(item.grad.data, torch.FloatTensor(centroids[name]), indices[idx - 1])
+            item.grad.data = utils.postProcessGrad(item.grad.data, torch.FloatTensor(centroids[name]), indices[idx - 1], name, v)
 
-def train(model, optimizer, train_loader, args, epoch, topk=(1,)):
+def train(model, optimizer, train_loader, args, epoch, v, topk=(1,)):
     model.train()
     losses = utils.AverageMeter('Time', ':6.3f')
     accurary = utils.AverageMeter('Time', ':6.3f')
     top5_accuracy = utils.AverageMeter('Time', ':6.3f')
     print_freq = len(train_loader.dataset) // args.train_batch_size // 10
     start_time = time.time()
+
+    # 
+
     for batch, (inputs, targets) in enumerate(train_loader):
 
         inputs, targets = inputs.to(device), targets.to(device)
@@ -223,7 +227,7 @@ def train(model, optimizer, train_loader, args, epoch, topk=(1,)):
         loss.backward()
         
         # XXX GC
-        graphVGG(model, args.pr_target)
+        graphVGG(model, args.pr_target, v)
         model = model.to(device)
 
         losses.update(loss.item(), inputs.size(0))
@@ -325,8 +329,17 @@ def main():
     elif args.lr_type == 'cos':
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.num_epochs)
 
+    # 初始化 v：用于梯度累积
+    v = {} 
+    for idx, (name, item) in enumerate(model.named_parameters()):
+        if "feature" in name and len(item.size()) == 4:
+            v[name] = torch.zeros_like(item)
+        # Full Connect layer
+        elif "classifier" in name and len(item.size()) == 2:
+            v[name] = torch.zeros_like(item)
+
     for epoch in range(start_epoch, args.num_epochs):
-        train(model, optimizer, data_loader.train_loader, args, epoch, topk=(1, 5) if args.dataset == 'imagenet' else (1, ))
+        train(model, optimizer, data_loader.train_loader, args, epoch, v, topk=(1, 5) if args.dataset == 'imagenet' else (1, ))
         scheduler.step()
         test_acc = test(model, data_loader.test_loader, topk=(1, 5) if args.dataset == 'imagenet' else (1, ))
 
