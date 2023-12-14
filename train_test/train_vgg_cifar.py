@@ -129,9 +129,11 @@ def train(model, optimizer, train_loader, args, epoch, v, topk=(1,)):
         loss = loss_func(output, targets[0: batch_size])
         loss.mul_(_r_num_batches_per_step)
         loss.backward()
-        for b in range(batch_size, step_size, batch_size):
+        for b in range(0, step_size, batch_size):
             _inputs = inputs[b:b+batch_size]
             _targets = targets[b:b+batch_size]
+            if _inputs.size(0) <= 0:
+                break
             _outputs = model(_inputs)
             _loss = loss_func(_outputs, _targets)
             _loss.mul_(_r_num_batches_per_step)
@@ -143,6 +145,7 @@ def train(model, optimizer, train_loader, args, epoch, v, topk=(1,)):
         losses.update(loss.item(), inputs.size(0))
         optimizer.step()
 
+        output = model(inputs)
         prec1 = utils.accuracy(output, targets, topk=topk)
         accurary.update(prec1[0], inputs.size(0))
         if len(topk) == 2:

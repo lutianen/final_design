@@ -267,7 +267,7 @@ def postProcessGrad(grad, targetGrad, indices, name, v):
 
     v[name] += grad # v 需要在外面初始化
 
-    A = torch.zeros(grad.size())
+    A = torch.zeros(grad.size()).to(grad.device)
     if v[name].dim() == 4: 
         for i, indice in enumerate(indices):
             # A[:, i, :, :] = A[:, indice, :, :]
