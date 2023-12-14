@@ -16,10 +16,11 @@ python ${PROJECT_PREFIX}/train_test/train_vgg_cifar.py \
     --job_dir ./experiment/cifar/vgg_1 \
     --pretrain_model ${PROJECT_PREFIX}/pretrain_model/vgg16_cifar10.pt \
     --lr 0.01 \
-    --lr_decay_step 50 100 150 \
+    --lr_decay_step 50 100 \
     --weight_decay 0.005  \
-    --num_epochs 200 \
+    --num_epochs 150 \
+    --num_batches_per_step 3 \
     --train_batch_size 128 \
-    --gpus 3 \
+    --gpus 2 \
     --pr_target 0.99 \
     --graph_gpu

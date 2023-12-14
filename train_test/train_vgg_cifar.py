@@ -1,6 +1,6 @@
 import math, time, sys, os, torch
 
-sys.path.append("/home/tianen/doc/_XiDian/___FinalDesign/FinalDesign/final_design")
+sys.path.append("/home/lutianen/final_design/")
 
 from data import cifar10_dataset
 from model.vgg_cifar import VGG
@@ -24,11 +24,12 @@ flops_lambda = {
 
 device = torch.device(f"cuda:{args.gpus[0]}") if torch.cuda.is_available() else 'cpu'
 checkpoint = utils.checkpoint(args)
-logger = utils.get_logger(os.path.join(args.job_dir, utils.getNowFormatTime() + '.log'))
+logger = utils.get_logger(os.path.join(args.job_dir, utils.local_time, utils.local_time  + '.log'))
 loss_func = torch.nn.CrossEntropyLoss()
 
 # Data
 print(">>> Preparing data...")
+args.train_batch_size *= args.num_batches_per_step
 data_loader = cifar10_dataset.Data(args)
 
 # Load model
@@ -56,12 +57,13 @@ def graphVGG(model, cr:float, v:dict) :
         if "feature" in name and len(item.size()) == 4:
             lam = flops_lambda['vgg_cifar'] # hyper-parameter shared across the network
             numFLOPs = flops_cfg['vgg_cifar'][index] # FLOPs of the index-th layer
-            convGrad = torch.div(item.grad.data, math.pow(numFLOPs, lam))
-            # convGrad = torch.norm(item.grad.data, 2, 1) # 卷积层梯度的 L2 范数，并在输出的通道维度上进行归一化
-            convGrad = convGrad.view(-1)
+
+            convGrad = item.grad.data.view(item.grad.data.size(0), -1)
+            convGrad = torch.norm(convGrad, 2, 1)
             grads.append(convGrad)
 
-            preversedNum = int(convGrad.size(0) *(1 - cr))
+            preversedNum = math.ceil(convGrad.size(0) *(1 - cr))
+            # preversedNum = int(convGrad.size(0) *(1 - cr))
             preversedGrad, _ = torch.topk(torch.abs(convGrad), preversedNum)
             threshold = preversedGrad[preversedNum-1]
 
@@ -69,27 +71,30 @@ def graphVGG(model, cr:float, v:dict) :
             originalConvGrad = item.grad.data
 
             cr = torch.sum(torch.lt(torch.abs(convGrad), threshold)).item()/convGrad.size(0)
-            _, _, centroid, indice = utils.graphGrad(originalConvGrad, int(originalConvGrad.size(0) * (1 - cr)))
+            _, _, centroid, indice = utils.graphGrad(originalConvGrad, math.ceil(originalConvGrad.size(0) * (1 - cr)))
             centroids[name] = centroid.reshape(-1, originalConvGrad.size(1), originalConvGrad.size(2), originalConvGrad.size(3))
             indices.append(indice)
 
             index += 1
         # Full Connect layer
-        elif "classifier" in name and len(item.size()) == 2:
-            classifierGrad = torch.norm(item.grad.data.view(item.grad.size(0), -1), 2, 1)
-            classifierGrad = classifierGrad.view(-1)
-            grads.append(classifierGrad)
+        # elif "classifier" in name and len(item.size()) == 2:
+        #     classifierGrad = item.grad.data.view(item.grad.data.size(0), -1)
+        #     classifierGrad = torch.norm(classifierGrad, 2, 1)
+        #     # classifierGrad = classifierGrad.view(-1)
+        #     grads.append(classifierGrad)
 
-            preversedNum = int(classifierGrad.size(0) *(1 - cr))
-            preversedGrad, _ = torch.topk(torch.abs(convGrad), preversedNum)
-            threshold = preversedGrad[preversedNum-1]
+        #     preversedNum = math.ceil(classifierGrad.size(0) *(1 - cr))
+        #     preversedGrad, _ = torch.topk(torch.abs(convGrad), preversedNum)
+        #     threshold = preversedGrad[preversedNum-1]
 
-            originalConvGrad = item.grad.data
+        #     originalConvGrad = item.grad.data
 
-            cr = torch.sum(torch.lt(torch.abs(classifierGrad), threshold)).item()/classifierGrad.size(0)
-            _, _, centroid, indice = utils.graphGrad(originalConvGrad, int(originalConvGrad.size(0) * (1 - cr)))
-            centroids[name] = centroid.reshape(-1, originalConvGrad.size(1))
-            indices.append(indice)
+        #     # cr = torch.sum(torch.lt(torch.abs(classifierGrad), threshold)).item()/classifierGrad.size(0)
+        #     # _, _, centroid, indice = utils.graphGrad(originalConvGrad, int(originalConvGrad.size(0) * (1 - cr)))
+        #     _, _, centroid, indice = utils.graphGrad(originalConvGrad, 
+        #                                              math.ceil(int(originalConvGrad.size(0) * (1 - cr))))
+        #     centroids[name] = centroid.reshape(-1, originalConvGrad.size(1))
+        #     indices.append(indice)
 
     # 优化项：使用 set 避免双重循环
     centroidsKeys = set(centroids.keys())
@@ -98,28 +103,43 @@ def graphVGG(model, cr:float, v:dict) :
     for _, (name, item) in enumerate(model.named_parameters()):
         if name in centroidsKeys:
             idx += 1
-            if idx == 0: continue
-            item.grad.data = utils.postProcessGrad(item.grad.data, torch.FloatTensor(centroids[name]), indices[idx - 1], name, v)
+            # if idx == 0: continue
+            item.grad.data = utils.postProcessGrad(item.grad.data, torch.FloatTensor(centroids[name]), indices[idx], name, v)
+    # print("GC finished.")
 
 def train(model, optimizer, train_loader, args, epoch, v, topk=(1,)):
     model.train()
     losses = utils.AverageMeter('Time', ':6.3f')
     accurary = utils.AverageMeter('Time', ':6.3f')
     top5_accuracy = utils.AverageMeter('Time', ':6.3f')
-    print_freq = len(train_loader.dataset) // args.train_batch_size // 10
+
+    batch_size = int(args.train_batch_size / args.num_batches_per_step)
+    step_size = args.num_batches_per_step * batch_size
+    _r_num_batches_per_step = 1.0 / args.num_batches_per_step
+
+    print_freq = len(train_loader.dataset) // batch_size // 10
     start_time = time.time()
 
     for batch, (inputs, targets) in enumerate(train_loader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        output = model(inputs)
-        loss = loss_func(output, targets)
+
+        model = model.to(device)
+        output = model(inputs[0: batch_size])
+        loss = loss_func(output, targets[0: batch_size])
+        loss.mul_(_r_num_batches_per_step)
         loss.backward()
+        for b in range(batch_size, step_size, batch_size):
+            _inputs = inputs[b:b+batch_size]
+            _targets = targets[b:b+batch_size]
+            _outputs = model(_inputs)
+            _loss = loss_func(_outputs, _targets)
+            _loss.mul_(_r_num_batches_per_step)
+            _loss.backward()
+            loss += _loss.item()
         
         # XXX GC
         graphVGG(model, args.pr_target, v)
-        model = model.to(device)
-
         losses.update(loss.item(), inputs.size(0))
         optimizer.step()
 

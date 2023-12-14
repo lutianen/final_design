@@ -17,6 +17,11 @@ import os
 
 device = torch.device(f"cuda:{args.gpus[0]}") if torch.cuda.is_available() else 'cpu'
 
+def getNowFormatTime(formatStr: str = "%Y.%m.%d-%H:%M:%S") -> str:
+    return time.strftime(formatStr, time.localtime(time.time()))
+
+local_time = getNowFormatTime()
+
 class AverageMeter(object):
     """Computes and stores the average and current value"""
     def __init__(self, name, fmt=':f'):
@@ -55,7 +60,7 @@ class record_config():
 
         _make_dir(self.job_dir)
 
-        config_dir = os.path.join(self.job_dir, getNowFormatTime() + ' config.txt')
+        config_dir = os.path.join(self.job_dir, local_time, local_time + ' config.txt')
         #if not os.path.exists(config_dir):
         if args.resume != None:
             with open(config_dir, 'a') as f:
@@ -75,7 +80,7 @@ class checkpoint():
         now = datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
 
         self.args = args
-        self.job_dir = Path(args.job_dir)
+        self.job_dir = Path(os.path.join(args.job_dir, local_time))
         self.ckpt_dir = self.job_dir / 'checkpoint'
         self.run_dir = self.job_dir / 'run'
 
@@ -266,14 +271,20 @@ def postProcessGrad(grad, targetGrad, indices, name, v):
     if v[name].dim() == 4: 
         for i, indice in enumerate(indices):
             # A[:, i, :, :] = A[:, indice, :, :]
-            A[:, i, :, :] = v[name][:, indice, :, :]
-            v[name][:, indice, :, :] = 0
+
+            # A[:, i, :, :] = v[name][:, indice, :, :]
+            # v[name][:, indice, :, :] = 0
+
+            A[i, :, :, :] = v[name][indice, :, :, :]
+            v[name][indice, :, :, :] = 0
     else:
         for i, indice in enumerate(indices):
             # A[:, i] = grad[:, indice]
-            A[:, i] = v[name][:, indice]
-            v[name][:, indice] = 0
+            # A[:, i] = v[name][:, indice]
+            # v[name][:, indice] = 0
 
+            A[i,:] = v[name][indice, :]
+            v[name][indice, :] = 0
     return A
 
 #label smooth
@@ -443,6 +454,3 @@ def graphGrad(grad, m):
     m_matrix = F.normalize(torch.exp(-pairwise_distances(G, Gprune)),1)
     Gprune = Gprune.cpu()
     return m_matrix, s_matrix, Gprune, indicek
-
-def getNowFormatTime(formatStr: str = "%Y-%m-%d %H:%M:%S") -> str:
-    return time.strftime(formatStr, time.localtime(time.time()))

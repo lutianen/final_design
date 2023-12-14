@@ -1,5 +1,13 @@
 import argparse
 
+# !!! Select right project prefix and data dir
+# ArchLinux (My PC)
+# PROJECT_PREFIX=/home/tianen/doc/_XiDian/___FinalDesign/FinalDesign/final_design
+# DATA_DIR=/home/tianen/doc/MachineLearningData/
+# Ubuntu Server
+PROJECT_PREFIX = "/home/lutianen/final_design"
+DATA_DIR = "/home/lutianen/data/"
+
 parser = argparse.ArgumentParser(description='NIPSPruner')
 
 parser.add_argument(
@@ -25,7 +33,7 @@ parser.add_argument(
 parser.add_argument(
     '--data_path',
     type=str,
-    default='/data/cifar10/',
+    default=DATA_DIR,
     help='The dictionary where the input is stored. default:/data/cifar10/',
 )
 
@@ -66,6 +74,13 @@ parser.add_argument(
 
 parser.add_argument('-p', '--print_freq', default=20, type=int,
                     metavar='N', help='print frequency (default: 10)')
+
+parser.add_argument(
+    '--num_batches_per_step',
+    type=int,
+    default=1,
+    help="num of batches per step"
+)
 
 parser.add_argument(
     '--train_batch_size',
